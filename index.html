@@ -227,7 +227,11 @@ svg.char{width:calc(var(--cell) - 10px);height:calc(var(--cell) - 10px);overflow
 
 <div id="hdr">
   <div id="stage-lbl">STAGE 1-1</div>
-  <button id="hint-btn" onclick="toggleHint()">💡 힌트</button>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div id="hdr-student" style="display:none;font-size:11px;color:var(--dim);
+      font-family:'Space Mono',monospace;letter-spacing:.5px;"></div>
+    <button id="hint-btn" onclick="toggleHint()">💡 힌트</button>
+  </div>
 </div>
 
 <div id="main">
@@ -252,6 +256,10 @@ svg.char{width:calc(var(--cell) - 10px);height:calc(var(--cell) - 10px);overflow
   <div id="controls">
     <button class="btn btn-submit" onclick="submit()">✔ 제출</button>
     <button class="btn btn-clear" onclick="clearReal()">↺ 초기화</button>
+    <button class="btn" id="sos-btn" onclick="triggerSOS()"
+      style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;">
+      🔔 힌트 요청
+    </button>
   </div>
   <div id="status-msg"></div>
   <div id="progress"><div id="progress-fill" style="width:0%"></div></div>
@@ -332,20 +340,43 @@ svg.char{width:calc(var(--cell) - 10px);height:calc(var(--cell) - 10px);overflow
 <div class="ov" id="ov-intro">
   <div class="card">
     <h2>🪞 평면거울의 마스터</h2>
+    <!-- 반/이름 입력 -->
+    <div id="entry-box" style="background:#f0f6ff;border:1px solid #c7d7fd;border-radius:10px;
+      padding:14px 16px;margin-bottom:16px;text-align:left;">
+      <div style="font-size:12px;font-weight:700;color:#2563eb;margin-bottom:10px;">📋 학생 정보 입력</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:12px;color:#4b5060;min-width:28px;">반</span>
+        <div id="class-display" style="font-family:'Space Mono',monospace;font-size:16px;
+          font-weight:700;color:#2563eb;background:#fff;border:1px solid #c7d7fd;
+          border-radius:6px;padding:6px 14px;min-width:60px;text-align:center;">
+          ?반
+        </div>
+        <span style="font-size:11px;color:#9298a8;">(선생님 화면 QR로 접속)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;color:#4b5060;min-width:28px;">이름</span>
+        <input id="student-name-input" type="text" maxlength="6" placeholder="이름 입력"
+          style="flex:1;border:1px solid #c7d7fd;border-radius:6px;padding:7px 10px;
+          font-size:14px;font-family:'Noto Sans KR',sans-serif;outline:none;
+          background:#fff;color:#111318;"
+          oninput="checkNameInput()"
+          onfocus="this.style.borderColor='#2563eb'"
+          onblur="this.style.borderColor='#c7d7fd'">
+      </div>
+      <div id="name-err" style="font-size:11px;color:#dc2626;margin-top:6px;min-height:14px;"></div>
+    </div>
     <p>
       <strong>오른쪽 = 거울 속에 비친 상</strong>이 보입니다.<br>
-      거울은 불투명한 일반 거울이에요. 오른쪽 화면은<br>
-      <em style="color:var(--mc)">"거울을 들여다봤을 때 보이는 모습"</em>을<br>
-      게임이 미리 알려주는 거예요.<br><br>
       여러분의 임무 👇<br>
       <strong style="color:var(--amber)">이 상이 생기려면, 실제 물체는 왼쪽 공간 어디에 어느 방향으로 있어야 할까?</strong><br><br>
       · 왼쪽 격자 빈 칸 클릭 → 캐릭터 배치<br>
-      · 캐릭터 클릭 → 방향 90° 회전 (앞→우→뒤→좌)<br>
+      · 캐릭터 클릭 → 방향 90° 회전<br>
       · [제출] → 위치 + 방향 모두 맞아야 통과!<br><br>
-      <span style="color:var(--amber)">위치만 맞고 방향이 틀려도 실패합니다.</span><br>
-      총 10단계 · 틀려도 재도전 가능 · 극악 난이도 🌶🌶🌶
+      <span style="color:var(--amber)">총 10단계 · 틀려도 재도전 가능 🌶🌶🌶</span>
     </p>
-    <button class="cbtn" onclick="startGame()">도전 시작 →</button>
+    <button class="cbtn" id="start-btn" onclick="startGame()" style="opacity:.45;cursor:not-allowed;">
+      이름을 입력하세요
+    </button>
   </div>
 </div>
 
@@ -373,11 +404,103 @@ svg.char{width:calc(var(--cell) - 10px);height:calc(var(--cell) - 10px);overflow
   <div class="card">
     <h2>🏆 평면거울 마스터!</h2>
     <p id="clear-sci"></p>
+    <p id="clear-name" style="font-size:15px;font-weight:700;color:var(--mc);margin-bottom:16px;"></p>
     <button class="cbtn" onclick="location.reload()">처음부터 하기</button>
   </div>
 </div>
 
 <script>
+// ═══════════════════════════════════════════════
+//  반 파라미터 & 학생 정보
+// ═══════════════════════════════════════════════
+const urlParams = new URLSearchParams(window.location.search);
+const classNum = parseInt(urlParams.get('class')) || 0;
+let studentName = '';
+
+window.addEventListener('DOMContentLoaded', () => {
+  const disp = document.getElementById('class-display');
+  if (classNum >= 1 && classNum <= 6) {
+    disp.textContent = classNum + '반';
+    disp.style.color = '#2563eb';
+  } else {
+    disp.textContent = '?반';
+    disp.style.color = '#9298a8';
+  }
+});
+
+function checkNameInput() {
+  const val = document.getElementById('student-name-input').value.trim();
+  const btn = document.getElementById('start-btn');
+  const err = document.getElementById('name-err');
+  if (val.length < 2) {
+    err.textContent = val.length > 0 ? '이름을 2글자 이상 입력하세요.' : '';
+    btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed';
+    btn.textContent = '이름을 입력하세요';
+  } else {
+    err.textContent = '';
+    btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+    btn.textContent = '도전 시작 →';
+  }
+}
+
+function registerStudent() {
+  const val = document.getElementById('student-name-input').value.trim();
+  if (val.length < 2) {
+    document.getElementById('name-err').textContent = '이름을 2글자 이상 입력하세요.';
+    return false;
+  }
+  studentName = val;
+  const hdr = document.getElementById('hdr-student');
+  hdr.textContent = (classNum ? classNum + '반 · ' : '') + studentName;
+  hdr.style.display = 'block';
+  saveProgress('1-1', 0, 'active', false);
+  return true;
+}
+
+function saveProgress(stageId, pct, status, sos) {
+  if (!studentName) return;
+  try {
+    // 키 형식: mm_cls{반번호}_{이름} — 대시보드와 동일
+    const key = `mm_cls${classNum}_${studentName}`;
+    localStorage.setItem(key, JSON.stringify({
+      name: studentName, cls: classNum,
+      stage: stageId, progress: pct,
+      status: status, sos: sos, ts: Date.now()
+    }));
+  } catch(e) {}
+}
+
+// SOS 요청 (쿨다운 30초)
+let sosCooldown = false;
+function triggerSOS() {
+  if (!gameActive) return;
+  const btn = document.getElementById('sos-btn');
+  if (sosCooldown) {
+    btn.textContent = '⏳ 잠시 후 다시 요청하세요';
+    setTimeout(() => btn.textContent = '🔔 힌트 요청', 1500);
+    return;
+  }
+  const lv = LEVELS[currentLevelIdx];
+  saveProgress(lv.id, Math.round((currentLevelIdx / LEVELS.length) * 100), 'active', true);
+  // UI 피드백
+  btn.textContent = '✅ 요청 완료!';
+  btn.style.background = '#f0fdf4';
+  btn.style.color = '#16a34a';
+  btn.style.borderColor = '#bbf7d0';
+  showMsg('🔔 선생님께 힌트를 요청했어요! 잠시 기다려주세요.', '#16a34a');
+  sosCooldown = true;
+  setTimeout(() => {
+    sosCooldown = false;
+    btn.textContent = '🔔 힌트 요청';
+    btn.style.background = '#fef2f2';
+    btn.style.color = '#dc2626';
+    btn.style.borderColor = '#fca5a5';
+    // SOS 해제
+    const lv2 = LEVELS[currentLevelIdx];
+    saveProgress(lv2.id, Math.round((currentLevelIdx / LEVELS.length) * 100), 'active', false);
+  }, 30000);
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  좌표계 (확정)
 //
@@ -896,6 +1019,11 @@ function wrong(msg) {
 function correct() {
   showMsg('🎉 정답! 원리를 확인해 봐요!', '#3dffa0');
   gameActive = false;
+  // 진도 저장
+  const lv = LEVELS[currentLevelIdx];
+  const pct = Math.round(((currentLevelIdx + 1) / LEVELS.length) * 100);
+  const isLast = currentLevelIdx === LEVELS.length - 1;
+  saveProgress(lv.id, pct, isLast ? 'clear' : 'active', false);
   setTimeout(() => showExplain(currentLevelIdx), 700);
 }
 
@@ -1404,6 +1532,13 @@ function showClearPopup() {
 · <strong>짝수 번 반사</strong> → 원래 방향 복구<br><br>
 거울 축이 기울어져도 언제나<br>
 '거울면에 수직인 방향으로 대칭'이 핵심입니다! 🎓`;
+  // 학생 이름 표시
+  if (studentName) {
+    document.getElementById('clear-name').textContent =
+      `🎉 ${classNum ? classNum + '반 ' : ''}${studentName} — 전 스테이지 클리어!`;
+  }
+  // 최종 클리어 저장
+  saveProgress('CLEAR', 100, 'clear', false);
   document.getElementById('ov-clear').style.display = 'flex';
 }
 
@@ -1427,6 +1562,7 @@ function toggleHint() {
   b.style.display = b.style.display === 'none' ? 'block' : 'none';
 }
 function startGame() {
+  if (!registerStudent()) return;
   document.getElementById('ov-intro').style.display = 'none';
   buildGrids();
   startTutorial();
